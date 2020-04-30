@@ -16,6 +16,7 @@ package pubsub_test
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"sync"
 	"testing"
@@ -70,6 +71,8 @@ func TestPSTest(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
+
+	srv.AddQueueError(errors.New("oops"))
 
 	go func() {
 		for i := 0; i < 10; i++ {

@@ -47,6 +47,7 @@ import (
 // problem if tests are run in parallel, or even if concurrent parts of the same test
 // change the value of the variable.
 var now atomic.Value
+var queueError error
 
 func init() {
 	now.Store(time.Now)
@@ -62,6 +63,10 @@ type Server struct {
 	srv     *testutil.Server
 	Addr    string  // The address that the server is listening on.
 	GServer GServer // Not intended to be used directly.
+}
+
+func (s *Server) AddQueueError(e error) {
+	queueError = e
 }
 
 // GServer is the underlying service implementor. It is not intended to be used
@@ -483,6 +488,9 @@ func (s *GServer) DeleteSubscription(_ context.Context, req *pb.DeleteSubscripti
 }
 
 func (s *GServer) Publish(_ context.Context, req *pb.PublishRequest) (*pb.PublishResponse, error) {
+	if queueError != nil {
+		return nil, queueError
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
