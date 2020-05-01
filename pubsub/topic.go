@@ -51,6 +51,13 @@ const (
 // ErrOversizedMessage indicates that a message's size exceeds MaxPublishRequestBytes.
 var ErrOversizedMessage = bundler.ErrOversizedItem
 
+// QueueError is a default value for err field in Publish function responce
+var QueueError error
+
+func AddQueueError(e error) {
+	QueueError = e
+}
+
 // Topic is a reference to a PubSub topic.
 //
 // The methods of Topic are safe for use by multiple goroutines.
@@ -411,6 +418,8 @@ func (t *Topic) Publish(ctx context.Context, msg *Message) *PublishResult {
 		},
 	})
 	r := &PublishResult{ready: make(chan struct{})}
+	r.err = QueueError
+	QueueError = nil
 	t.initBundler()
 	t.mu.RLock()
 	defer t.mu.RUnlock()

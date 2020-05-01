@@ -24,6 +24,7 @@ import (
 	"cloud.google.com/go/internal/testutil"
 	"cloud.google.com/go/pubsub"
 	"cloud.google.com/go/pubsub/pstest"
+	pubSubWithQueueError "github.com/MarErm27/alicebob/pubsub"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc"
 )
@@ -72,7 +73,59 @@ func TestPSTest(t *testing.T) {
 		panic(err)
 	}
 
-	srv.AddQueueError(errors.New("oops"))
+	go func() {
+		for i := 0; i < 10; i++ {
+			srv.Publish("projects/some-project/topics/test-topic", []byte(strconv.Itoa(i)), nil)
+		}
+	}()
+
+	ctx, cancel := context.WithCancel(ctx)
+	var mu sync.Mutex
+	count := 0
+	err = sub.Receive(ctx, func(ctx context.Context, m *pubsub.Message) {
+		mu.Lock()
+		count++
+		if count >= 10 {
+			cancel()
+		}
+		mu.Unlock()
+		m.Ack()
+	})
+	if err != nil {
+		panic(err)
+	}
+}
+
+func TestQueueError(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	srv := pstest.NewServer()
+	defer srv.Close()
+
+	conn, err := grpc.Dial(srv.Addr, grpc.WithInsecure())
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
+
+	opts := withGRPCHeadersAssertionAlt(t, option.WithGRPCConn(conn))
+	client, err := pubsub.NewClient(ctx, "some-project", opts...)
+	if err != nil {
+		panic(err)
+	}
+	defer client.Close()
+
+	topic, err := client.CreateTopic(ctx, "test-topic")
+	if err != nil {
+		panic(err)
+	}
+
+	sub, err := client.CreateSubscription(ctx, "sub-name", pubsub.SubscriptionConfig{Topic: topic})
+	if err != nil {
+		panic(err)
+	}
+
+	pubSubWithQueueError.AddQueueError(errors.New("oops"))
 
 	go func() {
 		for i := 0; i < 10; i++ {
