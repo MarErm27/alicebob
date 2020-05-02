@@ -24,7 +24,9 @@ import (
 	"cloud.google.com/go/internal/testutil"
 	"cloud.google.com/go/pubsub"
 	"cloud.google.com/go/pubsub/pstest"
-	pubSubWithQueueError "github.com/MarErm27/alicebob/pubsub"
+
+	// pubSubWithQueueError "github.com/MarErm27/alicebob/pubsub"
+	pb "cloud.google.com/go/pubsub"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc"
 )
@@ -119,33 +121,16 @@ func TestQueueError(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
+	defer topic.Stop()
 
-	sub, err := client.CreateSubscription(ctx, "sub-name", pubsub.SubscriptionConfig{Topic: topic})
-	if err != nil {
-		panic(err)
-	}
+	tesQueueError := errors.New("oops")
+	pb.AddQueueError(tesQueueError)
 
-	pubSubWithQueueError.AddQueueError(errors.New("oops"))
-
-	go func() {
-		for i := 0; i < 10; i++ {
-			srv.Publish("projects/some-project/topics/test-topic", []byte(strconv.Itoa(i)), nil)
-		}
-	}()
-
-	ctx, cancel := context.WithCancel(ctx)
-	var mu sync.Mutex
-	count := 0
-	err = sub.Receive(ctx, func(ctx context.Context, m *pubsub.Message) {
-		mu.Lock()
-		count++
-		if count >= 10 {
-			cancel()
-		}
-		mu.Unlock()
-		m.Ack()
+	r := topic.Publish(ctx, &pubsub.Message{
+		Data: []byte("hello world"),
 	})
-	if err != nil {
-		panic(err)
+
+	if r.Err != tesQueueError {
+		panic(r.Err)
 	}
 }

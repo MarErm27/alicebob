@@ -399,8 +399,13 @@ var errTopicStopped = errors.New("pubsub: Stop has been called for this topic")
 // need to be stopped by calling t.Stop(). Once stopped, future calls to Publish
 // will immediately return a PublishResult with an error.
 func (t *Topic) Publish(ctx context.Context, msg *Message) *PublishResult {
+	if QueueError != nil {
+		return &PublishResult{Err: QueueError}
+		QueueError = nil
+	}
+
 	if !t.EnableMessageOrdering && msg.OrderingKey != "" {
-		return &PublishResult{err: errors.New("Topic.EnableMessageOrdering=false, but an OrderingKey was set in Message. Please remove the OrderingKey or turn on Topic.EnableMessageOrdering")}
+		return &PublishResult{Err: errors.New("Topic.EnableMessageOrdering=false, but an OrderingKey was set in Message. Please remove the OrderingKey or turn on Topic.EnableMessageOrdering")}
 	}
 
 	// Use a PublishRequest with only the Messages field to calculate the size
@@ -418,8 +423,6 @@ func (t *Topic) Publish(ctx context.Context, msg *Message) *PublishResult {
 		},
 	})
 	r := &PublishResult{ready: make(chan struct{})}
-	r.err = QueueError
-	QueueError = nil
 	t.initBundler()
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -457,7 +460,7 @@ func (t *Topic) Stop() {
 type PublishResult struct {
 	ready    chan struct{}
 	serverID string
-	err      error
+	Err      error
 }
 
 // Ready returns a channel that is closed when the result is ready.
@@ -470,20 +473,20 @@ func (r *PublishResult) Get(ctx context.Context) (serverID string, err error) {
 	// If the result is already ready, return it even if the context is done.
 	select {
 	case <-r.Ready():
-		return r.serverID, r.err
+		return r.serverID, r.Err
 	default:
 	}
 	select {
 	case <-ctx.Done():
 		return "", ctx.Err()
 	case <-r.Ready():
-		return r.serverID, r.err
+		return r.serverID, r.Err
 	}
 }
 
 func (r *PublishResult) set(sid string, err error) {
 	r.serverID = sid
-	r.err = err
+	r.Err = err
 	close(r.ready)
 }
 
