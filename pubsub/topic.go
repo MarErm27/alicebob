@@ -400,8 +400,10 @@ var errTopicStopped = errors.New("pubsub: Stop has been called for this topic")
 // will immediately return a PublishResult with an error.
 func (t *Topic) Publish(ctx context.Context, msg *Message) *PublishResult {
 	if QueueError != nil {
-		return &PublishResult{Err: QueueError}
+		err := QueueError
 		QueueError = nil
+		return &PublishResult{Err: err}
+
 	}
 
 	if !t.EnableMessageOrdering && msg.OrderingKey != "" {
